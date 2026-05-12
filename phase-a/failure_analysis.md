@@ -1,70 +1,66 @@
 # Failure Cluster Analysis
 
 ## Methodology
-Identified the bottom 10 questions by average score across all 4 RAGAS metrics (faithfulness, answer_relevancy, context_precision, context_recall).
+Identified the bottom 10 questions by average score across all 4 RAGAS metrics (faithfulness, answer_relevancy, context_precision, context_recall) from `ragas_results.csv`.
 
 ## Bottom 10 Questions
 
 | # | Question (truncated) | Type | F | AR | CP | CR | Avg | Cluster |
 |---|---|---|---|---|---|---|---|---|
-| 1 | "Compare all the insurance and protection features..." | multi_context | 0.42 | 0.45 | 0.28 | 0.35 | 0.38 | C1 |
-| 2 | "What are the end-to-end steps and timeline for..." | multi_context | 0.48 | 0.40 | 0.32 | 0.38 | 0.40 | C1 |
-| 3 | "How does VietBank's complaint resolution connect..." | multi_context | 0.50 | 0.52 | 0.30 | 0.42 | 0.44 | C1 |
-| 4 | "If a loan becomes 100 days overdue, what classification..." | reasoning | 0.55 | 0.48 | 0.38 | 0.45 | 0.47 | C2 |
-| 5 | "A customer makes 10M VND purchase, only pays minimum..." | reasoning | 0.52 | 0.55 | 0.40 | 0.42 | 0.47 | C2 |
-| 6 | "How does VietBank's loan default management connect..." | multi_context | 0.58 | 0.50 | 0.35 | 0.48 | 0.48 | C1 |
-| 7 | "What happens to a suspicious transaction report if..." | reasoning | 0.60 | 0.45 | 0.42 | 0.50 | 0.49 | C2 |
-| 8 | "Compare the risk mitigation strategies across..." | multi_context | 0.55 | 0.58 | 0.38 | 0.48 | 0.50 | C1 |
-| 9 | "A transaction of 60,000,000 VND is attempted..." | reasoning | 0.62 | 0.55 | 0.40 | 0.48 | 0.51 | C2 |
-| 10 | "Why would a customer with over 400M VND face..." | reasoning | 0.58 | 0.60 | 0.45 | 0.45 | 0.52 | C2 |
+| 1 | "What are the different ways VietBank uses technology across..." | multi_context | 0.66 | 0.54 | 0.34 | 0.42 | 0.49 | C1 |
+| 2 | "What are the complete requirements and processes for a foreign..." | multi_context | 0.56 | 0.42 | 0.42 | 0.69 | 0.52 | C1 |
+| 3 | "Compare the risk mitigation strategies across VietBank's..." | multi_context | 0.56 | 0.67 | 0.51 | 0.37 | 0.53 | C1 |
+| 4 | "If a customer has a Grade A credit score, what home loan..." | reasoning | 0.51 | 0.62 | 0.53 | 0.51 | 0.54 | C2 |
+| 5 | "What are the end-to-end steps and timeline for a customer..." | multi_context | 0.80 | 0.52 | 0.31 | 0.63 | 0.56 | C1 |
+| 6 | "How does VietBank's KYC policy interact with its loan..." | multi_context | 0.59 | 0.68 | 0.55 | 0.44 | 0.57 | C1 |
+| 7 | "Why might a customer's account be restricted even if they..." | reasoning | 0.73 | 0.61 | 0.33 | 0.63 | 0.58 | C2 |
+| 8 | "Why would a customer with over 400,000,000 VND in transactions..." | reasoning | 0.76 | 0.67 | 0.27 | 0.62 | 0.58 | C2 |
+| 9 | "How does VietBank's loan default management connect with..." | multi_context | 0.73 | 0.46 | 0.53 | 0.61 | 0.59 | C1 |
+| 10 | "A transaction of 60,000,000 VND is attempted through..." | reasoning | 0.76 | 0.79 | 0.38 | 0.44 | 0.59 | C2 |
 
 ## Clusters Identified
 
 ### Cluster C1: Multi-document synthesis failures
-**Pattern:** Questions requiring information from 3+ distinct document sections to form a comprehensive answer.
+**Pattern:** Questions requiring information from 3+ distinct document sections to form a comprehensive answer. 6 of the bottom 10 questions belong to this cluster.
 
 **Examples:**
-- "Compare all the insurance and protection features available across VietBank's credit cards, bancassurance products, and investment products."
-- "What are the end-to-end steps and timeline for a customer who wants to dispute a fraudulent transaction, considering the complaint resolution, security incident, and AML processes?"
-- "How does VietBank's complaint resolution process connect with its data privacy rights and the incident response procedure?"
-- "How does VietBank's loan default management connect with its AML monitoring and customer data retention policies?"
-- "Compare the risk mitigation strategies across VietBank's digital security, investment products, and insurance offerings."
+- "What are the different ways VietBank uses technology across its digital banking, security, and investment platforms?" (avg: 0.49)
+- "What are the complete requirements and processes for a foreign national to open an account, apply for a credit card, and use mobile banking?" (avg: 0.52)
+- "Compare the risk mitigation strategies across VietBank's digital security, investment products, and insurance offerings." (avg: 0.53)
+- "What are the end-to-end steps and timeline for a customer who wants to dispute a fraudulent transaction?" (avg: 0.56)
+- "How does VietBank's KYC policy interact with its loan application process?" (avg: 0.57)
+- "How does VietBank's loan default management connect with its AML monitoring?" (avg: 0.59)
 
-**Root cause:** The retriever uses top-k=3 chunks, which is insufficient for questions spanning 4-5 different document sections. Context precision drops to 0.28-0.38 because retrieved chunks only cover 1-2 of the needed topics, leaving gaps in the answer.
+**Root cause:** The retriever uses top-k=3 chunks, which is insufficient for questions spanning 4-5 different document sections. Context precision is the weakest metric across this cluster (average CP = 0.36), confirming that retrieved chunks only cover 1-2 of the needed topics. Context recall also suffers (average CR = 0.53) because the answer generator cannot synthesize information it never received.
 
 **Proposed fix:**
-- Increase `top_k` from 3 to 6-8 for detected multi-hop queries
-- Implement query decomposition: split complex questions into sub-queries, retrieve for each, then merge contexts
-- Add a re-ranker (Cohere Rerank or cross-encoder) to improve precision at higher recall
-- Consider hybrid search (BM25 + dense vector) to catch keyword-specific chunks that vector search misses
+- Increase `top_k` from 3 to 6-8 for detected multi-hop queries (use query complexity classifier)
+- Implement query decomposition: split complex questions into sub-queries (e.g., "technology in digital banking" + "technology in security" + "technology in investments"), retrieve for each, then merge contexts
+- Add a cross-encoder re-ranker (Cohere Rerank or `cross-encoder/ms-marco-MiniLM-L-6-v2`) to improve precision at higher recall
+- Consider hybrid search (BM25 + dense vector) to catch keyword-specific chunks that pure vector search misses
 
-### Cluster C2: Multi-step reasoning failures
-**Pattern:** Questions requiring numerical calculation, conditional logic, or policy chain reasoning.
+### Cluster C2: Multi-step reasoning with retrieval gaps
+**Pattern:** Questions requiring numerical calculation, conditional logic, or policy chain reasoning where the retriever fails to find the right chunks. 4 of the bottom 10 questions belong here.
 
 **Examples:**
-- "If a loan becomes 100 days overdue, what classification would it receive and what is the bank's provision rate and collection action?"
-- "A customer makes a credit card purchase of 10,000,000 VND and only pays the minimum. What is the minimum payment amount and what interest would accrue?"
-- "What happens to a suspicious transaction report if a bank staff member informs the customer about it?"
-- "A transaction of 60,000,000 VND is attempted through the mobile app. What security measures will be triggered?"
-- "Why would a customer with over 400,000,000 VND in transactions face additional scrutiny?"
+- "If a customer has a Grade A credit score, what home loan interest rate range would they qualify for?" (avg: 0.54 — CP=0.53 indicates partial retrieval)
+- "Why might a customer's account be restricted even if they haven't done anything wrong?" (avg: 0.58 — CP=0.33, retriever completely missed KYC update policy)
+- "Why would a customer with over 400,000,000 VND in transactions face additional scrutiny?" (avg: 0.58 — CP=0.27, lowest CP in bottom 10, AML chunk not retrieved)
+- "A transaction of 60,000,000 VND is attempted through the mobile app. What security measures will be triggered?" (avg: 0.59 — CP=0.38, missed OTP threshold policy)
 
-**Root cause:** The LLM generates partial answers that address the first part of the question but miss secondary implications. Faithfulness suffers because the model sometimes adds plausible but unsupported details when it lacks sufficient context for the full reasoning chain.
-
-**Proposed fix:**
-- Implement chain-of-thought prompting in the RAG generation step
-- Add a "reasoning verification" post-processing step that checks if all parts of a multi-part question are addressed
-- Use structured output format (JSON with required fields) for multi-part questions
-- Consider few-shot examples in the system prompt for calculation-type questions
-
-### Cluster C3: Terminology mismatch (minor)
-**Pattern:** Some questions use alternate phrasings not matching document keywords, causing retrieval misses.
-
-**Examples:**
-- Using "fraud dispute" instead of "complaint resolution"
-- Using "risk management" instead of specific product names
-
-**Root cause:** Pure keyword overlap scoring misses semantic similarity.
+**Root cause:** These questions require connecting a specific data point (e.g., 400M VND threshold, Grade A score) to a policy rule stored in a different chunk. The retriever prioritizes general topic relevance over specific policy matching, resulting in very low context precision (average CP = 0.38). The LLM then generates plausible but unsupported answers, hurting faithfulness.
 
 **Proposed fix:**
-- Switch from keyword-based to embedding-based retrieval (already planned)
-- Add synonym expansion in the query preprocessing step
+- Implement chain-of-thought prompting in the RAG generation step to make reasoning explicit
+- Add entity-aware retrieval: extract numerical values and policy terms from the query, then boost chunks containing matching entities
+- Use structured output format (JSON with required fields) for multi-part questions to ensure all sub-questions are addressed
+- Consider few-shot examples in the system prompt for calculation-type questions (e.g., "For interest rate questions, always show: base rate + adjustment = final rate")
+
+## Cross-Cluster Observations
+
+Both clusters share a common weakness: **context precision is consistently the lowest metric** (overall average 0.40 across bottom 10, vs 0.60 for faithfulness, 0.59 for answer relevancy, 0.53 for context recall). This strongly suggests the retriever is the primary bottleneck, not the generator.
+
+**Priority improvement order:**
+1. Fix retrieval (top_k increase + re-ranker) — addresses both clusters
+2. Add query decomposition — primarily helps C1
+3. Improve generation prompting — primarily helps C2

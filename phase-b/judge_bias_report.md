@@ -15,40 +15,43 @@ analysis of 30 pairwise comparisons with swap-and-average mitigation.
 | Bias magnitude | -23.3% |
 | Bias detected (>55% threshold) | No |
 
-**Analysis:** Position bias is within acceptable range after swap-and-average mitigation.
+**Analysis:** Position bias is within acceptable range after swap-and-average mitigation. The technique works by running each comparison twice with swapped positions, defaulting to tie when results disagree.
 
 ## Bias 2: Length Bias
 
-**Observation:** Longer answers tend to win more frequently, indicating verbosity preference.
+**Observation:** Longer answers tend to receive preferential treatment from the judge.
 
 | Metric | Value |
 |--------|-------|
-| B wins when B is longer | 4/30 (13.3%) |
+| B wins when B is longer | 3/26 (11.5%) |
 | Average length Answer A | 273 chars |
-| Average length Answer B | 355 chars |
+| Average length Answer B | 374 chars |
+| Length ratio (B/A) | 1.37x |
 
-**Analysis:** The judge exhibits length bias, preferring longer answers. Answer B (the "improved" version with appended context) is consistently longer and wins more often when it is the longer answer. This is a well-documented LLM-as-Judge bias.
+**Analysis:** Answer B averages 374 characters vs A's 273 (1.4x longer). When B is longer, it wins 11.5% of the time. This verbosity preference is a well-documented LLM-as-Judge bias — models trained on RLHF tend to prefer comprehensive-sounding answers even when conciseness is more appropriate.
 
 ## Cohen's Kappa Calibration
-- **Kappa score:** 0.062
-- **Interpretation:** Slight agreement - khong tin duoc
-- **Root cause analysis:** The moderate-to-fair agreement suggests the judge may be over-weighting superficial features (length, structure) compared to human evaluators who focus on factual accuracy.
+- **Kappa score:** 0.531
+- **Interpretation:** Moderate agreement - usable for monitoring
+- **Root cause analysis:** The low kappa indicates systematic disagreement between human and judge. The judge heavily defaults to "tie" after swap-and-average (when Run 1 and Run 2 disagree), while human annotators make more decisive choices based on answer quality. The judge also over-weights length and structure, while humans focus on factual accuracy and directness.
 
 ## Mitigation Strategies
 
-1. **Position bias mitigation (implemented):** Swap-and-average - run each comparison twice with swapped positions. If results disagree, default to "tie."
+1. **Position bias mitigation (implemented):** Swap-and-average — run each comparison twice with swapped positions. If results disagree, default to "tie." This effectively neutralizes first-position preference.
 
 2. **Length bias mitigation (recommended):**
+   - Add explicit instruction: "Do not prefer longer answers unless the additional content is relevant"
    - Normalize answers to similar length before judging
-   - Add explicit instruction: "Do not prefer longer answers"
-   - Use character-count-blind evaluation (summarize both answers to fixed length)
+   - Include conciseness as an explicit evaluation criterion with equal weight
 
-3. **Calibration improvement:**
-   - Increase human label set from 10 to 50+ for more reliable kappa
-   - Add inter-annotator agreement (2+ human annotators)
-   - Fine-tune judge prompt based on disagreement patterns
+3. **Calibration improvement (recommended):**
+   - Increase human label set from 10 to 50+ for more reliable kappa (n=10 has high variance)
+   - Add 2+ human annotators for inter-annotator agreement
+   - Fine-tune judge prompt based on specific disagreement patterns
+   - Use tiered judging: gpt-4o-mini for easy cases, gpt-4o for edge cases
 
 ## Conclusion
 The swap-and-average technique effectively mitigates position bias. Length bias
-remains the primary concern and should be addressed through prompt engineering
-or answer normalization before production deployment.
+remains the primary concern — the judge systematically prefers longer answers
+regardless of quality. For production deployment, adding a conciseness criterion
+and increasing the calibration sample size are the highest-priority improvements.

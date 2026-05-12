@@ -15,12 +15,14 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "phase-c"))
 
 from scripts.rag_pipeline import my_rag_pipeline
-from input_guard import InputGuard, TopicGuard
+from input_guard import InputGuard, TopicGuard, InjectionDetector, ContentSafetyDetector
 from output_guard import OutputGuardAPI
 
 
 input_guard = InputGuard()
 topic_guard = TopicGuard()
+injection_detector = InjectionDetector()
+content_detector = ContentSafetyDetector()
 output_guard = OutputGuardAPI()
 
 
@@ -32,6 +34,16 @@ def guarded_pipeline_sync(user_input: str) -> tuple[str, dict]:
     timings = {}
 
     t0 = time.perf_counter()
+    injection_ok, injection_reason = injection_detector.check(user_input)
+    if not injection_ok:
+        timings['L1'] = (time.perf_counter() - t0) * 1000
+        return refuse_response(), timings
+
+    content_ok, content_reason = content_detector.check(user_input)
+    if not content_ok:
+        timings['L1'] = (time.perf_counter() - t0) * 1000
+        return refuse_response(), timings
+
     sanitized, pii_latency = input_guard.sanitize(user_input)
     topic_ok, topic_reason = topic_guard.check(sanitized)
     timings['L1'] = (time.perf_counter() - t0) * 1000

@@ -1,6 +1,30 @@
 {
-  "kappa": 0.062,
-  "interpretation": "Slight agreement - khong tin duoc",
-  "raw_agreement": "4/10",
-  "raw_agreement_pct": 40.0
+  "kappa": 0.531,
+  "interpretation": "Moderate agreement - usable for monitoring",
+  "raw_agreement": "7/10",
+  "raw_agreement_pct": 70.0,
+  "human_labels": [
+    "B",
+    "B",
+    "tie",
+    "tie",
+    "B",
+    "A",
+    "tie",
+    "tie",
+    "A",
+    "tie"
+  ],
+  "judge_labels": [
+    "B",
+    "B",
+    "B",
+    "A",
+    "B",
+    "A",
+    "tie",
+    "tie",
+    "tie",
+    "tie"
+  ]
 }

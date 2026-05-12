@@ -1,9 +1,10 @@
 """
 Task C.4 - Output Guardrail: Llama Guard 3
 Uses Groq API (Option B) for Llama Guard inference - no GPU required.
-Falls back to keyword-based safety check if API unavailable.
+Falls back to pattern-based safety check if API unavailable.
 """
 
+import re
 import time
 import os
 import numpy as np
@@ -15,7 +16,7 @@ except ImportError:
     REQUESTS_AVAILABLE = False
 
 
-UNSAFE_CATEGORIES = {
+UNSAFE_KEYWORDS = {
     "violence": ["kill", "attack", "hurt", "weapon", "bomb", "shoot", "stab",
                   "murder", "assault", "fight", "destroy"],
     "self_harm": ["suicide", "self-harm", "cut yourself", "end my life",
@@ -29,9 +30,18 @@ UNSAFE_CATEGORIES = {
                        "government is hiding"],
 }
 
+UNSAFE_PATTERNS = [
+    re.compile(r"(?i)(how|way|method|step).{0,30}(to\s+)?(kill|attack|harm|hurt|steal|hack|exploit|rob|forge)"),
+    re.compile(r"(?i)(you\s+should|try\s+to|go\s+ahead\s+and)\s+.{0,30}(attack|kill|steal|hack|harm|hurt|forge|exploit)"),
+    re.compile(r"(?i)end\s+(your|my|their)\s+(life|existence)"),
+    re.compile(r"(?i)(are|is)\s+(inferior|subhuman|worthless)"),
+    re.compile(r"(?i)(deserve|should)\s+.{0,20}(die|be\s+killed|be\s+hurt|suffer)"),
+]
+
 
 class OutputGuardAPI:
-    """Uses Groq API for Llama Guard 3 inference."""
+    """Uses Groq API for Llama Guard 3 inference.
+    Falls back to keyword + pattern matching if Groq API key is not set."""
 
     def __init__(self, api_key: str = None):
         self.api_key = api_key or os.getenv("GROQ_API_KEY", "")
@@ -43,7 +53,7 @@ class OutputGuardAPI:
     def check(self, user_input: str, agent_response: str) -> tuple[bool, str, float]:
         if self._api_available:
             return self._check_api(user_input, agent_response)
-        return self._check_keyword(user_input, agent_response)
+        return self._check_local(user_input, agent_response)
 
     def _check_api(self, user_input: str, agent_response: str) -> tuple[bool, str, float]:
         payload = {
@@ -64,26 +74,31 @@ class OutputGuardAPI:
             latency_ms = (time.perf_counter() - start) * 1000
 
             if resp.status_code != 200:
-                return self._check_keyword(user_input, agent_response)
+                return self._check_local(user_input, agent_response)
 
             result = resp.json()['choices'][0]['message']['content']
             is_safe = "safe" in result.lower() and "unsafe" not in result.lower()
             return is_safe, result.strip(), latency_ms
 
-        except Exception as e:
-            latency_ms = (time.perf_counter() - start) * 1000
-            return self._check_keyword(user_input, agent_response)
+        except Exception:
+            return self._check_local(user_input, agent_response)
 
-    def _check_keyword(self, user_input: str, agent_response: str) -> tuple[bool, str, float]:
+    def _check_local(self, user_input: str, agent_response: str) -> tuple[bool, str, float]:
+        """Keyword + pattern based safety check (fallback when API unavailable)."""
         start = time.perf_counter()
 
-        combined = (user_input + " " + agent_response).lower()
+        combined_lower = (user_input + " " + agent_response).lower()
         violations = []
 
-        for category, keywords in UNSAFE_CATEGORIES.items():
+        for category, keywords in UNSAFE_KEYWORDS.items():
             for kw in keywords:
-                if kw in combined:
+                if kw in combined_lower:
                     violations.append(f"{category}:{kw}")
+
+        for pattern in UNSAFE_PATTERNS:
+            match = pattern.search(agent_response)
+            if match:
+                violations.append(f"pattern:{match.group()[:30]}")
 
         latency_ms = (time.perf_counter() - start) * 1000
 

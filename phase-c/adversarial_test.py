@@ -8,7 +8,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "phase-c"))
-from input_guard import InputGuard, TopicGuard
+from input_guard import InputGuard, TopicGuard, InjectionDetector, ContentSafetyDetector
 
 
 adversarial_attacks = [
@@ -60,6 +60,8 @@ legitimate_queries = [
 def test_adversarial_defense():
     input_guard = InputGuard()
     topic_guard = TopicGuard()
+    injection_detector = InjectionDetector()
+    content_detector = ContentSafetyDetector()
 
     results = []
 
@@ -72,25 +74,23 @@ def test_adversarial_defense():
         reason = ""
 
         try:
-            sanitized, latency = input_guard.sanitize(attack['text'])
-            topic_ok, topic_reason = topic_guard.check(sanitized)
-
-            if not topic_ok:
+            injection_ok, injection_reason = injection_detector.check(attack['text'])
+            if not injection_ok:
                 blocked = True
-                reason = topic_reason
+                reason = injection_reason
 
-            dangerous_kw = ["hack", "steal", "exploit", "bypass", "attack",
-                           "phishing", "forge", "embezzle", "robbery",
-                           "ignore", "override", "disabled", "unrestricted",
-                           "no limitations", "no rules", "no guidelines",
-                           "evil", "criminal", "malware"]
             if not blocked:
-                text_lower = attack['text'].lower()
-                for kw in dangerous_kw:
-                    if kw in text_lower:
-                        blocked = True
-                        reason = f"Dangerous keyword detected: '{kw}'"
-                        break
+                content_ok, content_reason = content_detector.check(attack['text'])
+                if not content_ok:
+                    blocked = True
+                    reason = content_reason
+
+            if not blocked:
+                sanitized, latency = input_guard.sanitize(attack['text'])
+                topic_ok, topic_reason = topic_guard.check(sanitized)
+                if not topic_ok:
+                    blocked = True
+                    reason = topic_reason
         except Exception as e:
             blocked = True
             reason = f"Exception: {str(e)}"
@@ -117,11 +117,23 @@ def test_adversarial_defense():
         reason = ""
 
         try:
-            sanitized, _ = input_guard.sanitize(query)
-            topic_ok, topic_reason = topic_guard.check(sanitized)
-            if not topic_ok:
+            injection_ok, injection_reason = injection_detector.check(query)
+            if not injection_ok:
                 blocked = True
-                reason = topic_reason
+                reason = injection_reason
+
+            if not blocked:
+                content_ok, content_reason = content_detector.check(query)
+                if not content_ok:
+                    blocked = True
+                    reason = content_reason
+
+            if not blocked:
+                sanitized, _ = input_guard.sanitize(query)
+                topic_ok, topic_reason = topic_guard.check(sanitized)
+                if not topic_ok:
+                    blocked = True
+                    reason = topic_reason
         except Exception as e:
             blocked = True
             reason = str(e)

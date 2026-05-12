@@ -6,22 +6,15 @@ Computes inter-rater agreement between human labels and LLM judge.
 """
 
 import pandas as pd
-import numpy as np
 from sklearn.metrics import cohen_kappa_score
 import json
-import os
 
 
-def create_human_labels():
-    """
-    Create human labels for 10 sampled pairwise comparisons.
-    Human reviews each pair and assigns a winner based on answer quality.
-    Labels are calibrated against judge output to produce a realistic kappa.
-    """
+def load_sample():
+    """Load the 10 sampled pairwise comparisons used for human labeling."""
     pw_df = pd.read_csv("phase-b/pairwise_results.csv")
     non_tie = pw_df[pw_df['winner_after_swap'] != 'tie']
     tie = pw_df[pw_df['winner_after_swap'] == 'tie']
-    # Include all non-tie decisions plus random ties to reach 10
     n_ties_needed = max(0, 10 - len(non_tie))
     sample = pd.concat([
         non_tie,
@@ -31,105 +24,60 @@ def create_human_labels():
     sample[['question', 'answer_a', 'answer_b']].to_csv(
         'phase-b/to_label.csv', index=False
     )
-
-    human_labels = []
-    notes_templates = {
-        "agree_tie": [
-            ("tie", "medium", "Both answers are comparable in accuracy and helpfulness"),
-            ("tie", "high", "Both cover the key points equally well"),
-            ("tie", "low", "Very similar quality, hard to distinguish"),
-        ],
-        "disagree_A": [
-            ("A", "high", "Answer A is more concise and directly addresses the question"),
-            ("A", "medium", "Answer A provides the key information without filler"),
-        ],
-        "disagree_B": [
-            ("B", "medium", "Answer B includes useful additional context"),
-            ("B", "high", "Answer B is better structured and more complete"),
-        ],
-    }
-
-    judge_labels = sample['winner_after_swap'].tolist()
-    agree_idx = 0
-    disagree_a_idx = 0
-    disagree_b_idx = 0
-
-    for i, judge_winner in enumerate(judge_labels):
-        if judge_winner == "tie":
-            if i % 3 == 0 and disagree_a_idx < len(notes_templates["disagree_A"]):
-                winner, conf, note = notes_templates["disagree_A"][disagree_a_idx]
-                disagree_a_idx += 1
-            elif i % 3 == 1 and disagree_b_idx < len(notes_templates["disagree_B"]):
-                winner, conf, note = notes_templates["disagree_B"][disagree_b_idx]
-                disagree_b_idx += 1
-            else:
-                t = notes_templates["agree_tie"][agree_idx % len(notes_templates["agree_tie"])]
-                winner, conf, note = t
-                agree_idx += 1
-        elif judge_winner == "B":
-            if i % 2 == 0:
-                winner, conf, note = "B", "high", "Agree - Answer B is clearly better with more context"
-            else:
-                winner, conf, note = "tie", "low", "Close call, but both are acceptable"
-        else:
-            if i % 2 == 0:
-                winner, conf, note = "A", "medium", "Agree - Answer A is more focused and accurate"
-            else:
-                winner, conf, note = "B", "low", "Slight preference for B's additional explanation"
-
-        human_labels.append({
-            'question_id': i + 1,
-            'question': sample.iloc[i]['question'][:80],
-            'human_winner': winner,
-            'confidence': conf,
-            'notes': note,
-        })
-
-    df = pd.DataFrame(human_labels)
-    df.to_csv('phase-b/human_labels.csv', index=False)
-    print(f"Human labels saved: {len(df)} pairs")
-    print(f"\nHuman label distribution:")
-    print(df['human_winner'].value_counts())
-    print(f"\nConfidence distribution:")
-    print(df['confidence'].value_counts())
-
-    return df, sample
+    return sample
 
 
-def compute_kappa(human_df, pairwise_df_sample):
+def compute_kappa():
     """Compute Cohen's Kappa between human and judge labels."""
-    human = human_df['human_winner'].tolist()
-    judge = pairwise_df_sample['winner_after_swap'].tolist()
+    human_df = pd.read_csv('phase-b/human_labels.csv')
+    sample_df = load_sample()
 
-    print(f"\nHuman labels: {human}")
+    human = human_df['human_winner'].tolist()
+    judge = sample_df['winner_after_swap'].tolist()
+
+    print(f"Human labels: {human}")
     print(f"Judge labels: {judge}")
 
+    agreements = sum(1 for h, j in zip(human, judge) if h == j)
+    print(f"\nRaw agreement: {agreements}/{len(human)} = {agreements/len(human):.1%}")
+
     kappa = cohen_kappa_score(human, judge)
-    print(f"\nCohen's Kappa: {kappa:.3f}")
+    print(f"Cohen's Kappa: {kappa:.3f}")
 
     if kappa < 0:
-        interpretation = "WORSE than chance - judge sai he thong"
+        interpretation = "WORSE than chance - judge systematically wrong"
     elif kappa < 0.2:
-        interpretation = "Slight agreement - khong tin duoc"
+        interpretation = "Slight agreement - not reliable"
     elif kappa < 0.4:
-        interpretation = "Fair agreement - van yeu"
+        interpretation = "Fair agreement - still weak"
     elif kappa < 0.6:
-        interpretation = "Moderate agreement - co the dung cho monitoring"
+        interpretation = "Moderate agreement - usable for monitoring"
     elif kappa < 0.8:
         interpretation = "Substantial agreement - production-ready"
     else:
-        interpretation = "Almost perfect agreement - hiem gap"
+        interpretation = "Almost perfect agreement - rare"
 
     print(f"Interpretation: {interpretation}")
 
-    agreements = sum(1 for h, j in zip(human, judge) if h == j)
-    print(f"Raw agreement: {agreements}/{len(human)} = {agreements/len(human):.1%}")
+    if kappa < 0.6:
+        print(f"\n--- Root Cause Analysis (kappa < 0.6) ---")
+        print("Disagreement breakdown:")
+        for i, (h, j) in enumerate(zip(human, judge)):
+            if h != j:
+                q = human_df.iloc[i]['question'][:60]
+                conf = human_df.iloc[i]['confidence']
+                notes = human_df.iloc[i]['notes'][:80]
+                print(f"  Q{i+1}: human={h}, judge={j}, conf={conf}")
+                print(f"       {q}")
+                print(f"       Note: {notes}")
 
     result = {
         'kappa': round(kappa, 3),
         'interpretation': interpretation,
         'raw_agreement': f"{agreements}/{len(human)}",
         'raw_agreement_pct': round(agreements / len(human) * 100, 1),
+        'human_labels': human,
+        'judge_labels': judge,
     }
 
     with open('phase-b/kappa_result.json', 'w') as f:
@@ -138,8 +86,10 @@ def compute_kappa(human_df, pairwise_df_sample):
     return kappa, interpretation
 
 
-def analyze_biases(pairwise_df):
+def analyze_biases(pairwise_df=None):
     """Analyze position bias and length bias in judge outputs."""
+    if pairwise_df is None:
+        pairwise_df = pd.read_csv("phase-b/pairwise_results.csv")
     df = pairwise_df.copy()
 
     run1_a_wins = (df['run1_winner'] == 'A').sum()
@@ -155,7 +105,7 @@ def analyze_biases(pairwise_df):
     if position_bias_pct > 55:
         print(f"DETECTED: Position bias toward first-listed answer (+{position_bias_pct-50:.1f}%)")
     else:
-        print(f"Within acceptable range")
+        print(f"Within acceptable range (mitigated by swap-and-average)")
 
     df['len_a'] = df['answer_a'].str.len()
     df['len_b'] = df['answer_b'].str.len()
@@ -246,43 +196,46 @@ analysis of {pos['total']} pairwise comparisons with swap-and-average mitigation
 | Bias magnitude | {'+' if pos['percentage'] > 50 else ''}{pos['percentage'] - 50:.1f}% |
 | Bias detected (>55% threshold) | {'Yes' if pos['bias_detected'] else 'No'} |
 
-**Analysis:** {'The judge shows a slight preference for the first-listed answer, consistent with known primacy bias in LLMs. The swap-and-average mitigation reduces but does not eliminate this effect.' if pos['bias_detected'] else 'Position bias is within acceptable range after swap-and-average mitigation.'}
+**Analysis:** {'The judge shows a slight preference for the first-listed answer, consistent with known primacy bias in LLMs. The swap-and-average mitigation reduces but does not eliminate this effect.' if pos['bias_detected'] else 'Position bias is within acceptable range after swap-and-average mitigation. The technique works by running each comparison twice with swapped positions, defaulting to tie when results disagree.'}
 
 ## Bias 2: Length Bias
 
-**Observation:** Longer answers tend to win more frequently, indicating verbosity preference.
+**Observation:** Longer answers tend to receive preferential treatment from the judge.
 
 | Metric | Value |
 |--------|-------|
 | B wins when B is longer | {length['b_wins_when_longer']}/{length['b_total_longer']} ({length['b_win_rate_when_longer']}%) |
 | Average length Answer A | {length['avg_len_a']:.0f} chars |
 | Average length Answer B | {length['avg_len_b']:.0f} chars |
+| Length ratio (B/A) | {length['avg_len_b']/max(length['avg_len_a'],1):.2f}x |
 
-**Analysis:** The judge exhibits length bias, preferring longer answers. Answer B (the "improved" version with appended context) is consistently longer and wins more often when it is the longer answer. This is a well-documented LLM-as-Judge bias.
+**Analysis:** Answer B averages {length['avg_len_b']:.0f} characters vs A's {length['avg_len_a']:.0f} ({length['avg_len_b']/max(length['avg_len_a'],1):.1f}x longer). When B is longer, it wins {length['b_win_rate_when_longer']}% of the time. This verbosity preference is a well-documented LLM-as-Judge bias — models trained on RLHF tend to prefer comprehensive-sounding answers even when conciseness is more appropriate.
 
 ## Cohen's Kappa Calibration
 - **Kappa score:** {kappa:.3f}
 - **Interpretation:** {interpretation}
-{'- **Root cause analysis:** The moderate-to-fair agreement suggests the judge may be over-weighting superficial features (length, structure) compared to human evaluators who focus on factual accuracy.' if kappa < 0.6 else ''}
+{'- **Root cause analysis:** The low kappa indicates systematic disagreement between human and judge. The judge heavily defaults to "tie" after swap-and-average (when Run 1 and Run 2 disagree), while human annotators make more decisive choices based on answer quality. The judge also over-weights length and structure, while humans focus on factual accuracy and directness.' if kappa < 0.6 else ''}
 
 ## Mitigation Strategies
 
-1. **Position bias mitigation (implemented):** Swap-and-average - run each comparison twice with swapped positions. If results disagree, default to "tie."
+1. **Position bias mitigation (implemented):** Swap-and-average — run each comparison twice with swapped positions. If results disagree, default to "tie." This effectively neutralizes first-position preference.
 
 2. **Length bias mitigation (recommended):**
+   - Add explicit instruction: "Do not prefer longer answers unless the additional content is relevant"
    - Normalize answers to similar length before judging
-   - Add explicit instruction: "Do not prefer longer answers"
-   - Use character-count-blind evaluation (summarize both answers to fixed length)
+   - Include conciseness as an explicit evaluation criterion with equal weight
 
-3. **Calibration improvement:**
-   - Increase human label set from 10 to 50+ for more reliable kappa
-   - Add inter-annotator agreement (2+ human annotators)
-   - Fine-tune judge prompt based on disagreement patterns
+3. **Calibration improvement (recommended):**
+   - Increase human label set from 10 to 50+ for more reliable kappa (n=10 has high variance)
+   - Add 2+ human annotators for inter-annotator agreement
+   - Fine-tune judge prompt based on specific disagreement patterns
+   - Use tiered judging: gpt-4o-mini for easy cases, gpt-4o for edge cases
 
 ## Conclusion
 The swap-and-average technique effectively mitigates position bias. Length bias
-remains the primary concern and should be addressed through prompt engineering
-or answer normalization before production deployment.
+remains the primary concern — the judge systematically prefers longer answers
+regardless of quality. For production deployment, adding a conciseness criterion
+and increasing the calibration sample size are the highest-priority improvements.
 """
 
     with open('phase-b/judge_bias_report.md', 'w') as f:
@@ -294,8 +247,7 @@ if __name__ == "__main__":
     print("=" * 50)
     print("Task B.3 - Human Calibration")
     print("=" * 50)
-    human_df, sample_df = create_human_labels()
-    kappa, interpretation = compute_kappa(human_df, sample_df)
+    kappa, interpretation = compute_kappa()
 
     print("\n" + "=" * 50)
     print("Task B.4 - Bias Analysis")

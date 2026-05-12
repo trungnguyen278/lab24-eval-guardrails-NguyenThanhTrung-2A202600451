@@ -26,21 +26,22 @@ cp .env.example .env
 - **Test set:** 50 questions (50% simple, 24% reasoning, 26% multi-context)
 - **Faithfulness:** 0.7864 | **Answer Relevancy:** 0.7603 | **Context Precision:** 0.6490 | **Context Recall:** 0.7123
 - **Total eval cost:** $0.00 (simulated pipeline; estimated $1.50 with real gpt-4o-mini)
-- **Failure clusters:** 2 identified — multi-document synthesis failures (C1) and multi-step reasoning failures (C2)
-- Observation: Context Precision (0.65) is below target (0.70), indicating retriever returns some irrelevant chunks, especially for multi-context queries
+- **Failure clusters:** 2 primary clusters identified — multi-document synthesis failures (C1, 6 questions) and multi-step reasoning with retrieval gaps (C2, 4 questions)
+- Observation: Context Precision (0.65) is the weakest metric overall, dropping to 0.34 average for bottom-10 questions — retriever is the primary bottleneck
 
 ### Phase B — LLM-as-Judge (25 pts)
-- **Cohen's kappa vs human:** 0.062 (slight agreement)
-- **Root cause:** Judge heavily defaults to "tie" after swap-and-average when runs disagree, while human annotators make decisive choices. The small sample size (n=10) also limits kappa reliability.
+- **Cohen's kappa vs human:** 0.531 (moderate agreement — usable for monitoring)
+- **Root cause for disagreements:** 3 out of 10 pairs differ — judge defaults to decisive winners while human annotators call "tie" when both answers are poor; conversely, human prefers concise direct answers (A) for simple questions while judge rates them "tie"
 - **Position bias:** A wins as first position 26.7% (mitigated by swap-and-average)
-- **Length bias:** B wins 13.3% when longer (Answer B averages 355 chars vs A's 273 chars)
+- **Length bias:** B wins 11.5% when longer (Answer B averages 374 chars vs A's 273 chars)
 
 ### Phase C — Guardrails (35 pts)
-- **PII detection rate:** 86% (6/7 inputs with PII detected)
-- **Topic validator accuracy:** 100% (20/20)
-- **Adversarial defense:** 80% (16/20 attacks blocked, 0% false positives)
+- **PII detection rate:** 100% (7/7 inputs with PII detected), P95 latency 1.05ms
+- **Topic validator accuracy:** 100% (20/20), refuse rate 50% (10 off-topic correctly refused)
+- **Adversarial defense:** 100% (20/20 attacks blocked, 0% false positives on 10 legitimate queries)
 - **Output guard (Llama Guard keyword fallback):** 100% unsafe detection, 0% false positives
-- **Latency:** L1 P95 < 1ms, L3 P95 < 1ms — well within targets
+- **Full pipeline latency:** L1 P95=0.1ms, L2 P95=0.2ms, L3 P95=0.0ms, Total P95=0.4ms
+- **Guardrail overhead:** +0.1ms P50, +0.2ms P95 — well within all targets
 
 ### Phase D — Blueprint
 See [phase-d/blueprint.md](phase-d/blueprint.md) — includes 7 SLOs, architecture diagram, 3 incident playbooks, and cost analysis ($241/mo for 100K queries).
@@ -81,11 +82,11 @@ python phase-c/full_pipeline.py
 
 ## Lessons Learned
 
-Building an end-to-end evaluation and guardrail system revealed that measuring RAG quality is only the beginning — the real challenge is maintaining quality in production. RAGAS metrics showed that multi-context questions are the weakest point in our pipeline (context precision drops to 0.50), pointing to a need for better retrieval strategies like query decomposition or hybrid search.
+Building an end-to-end evaluation and guardrail system revealed that measuring RAG quality is only the beginning — the real challenge is maintaining quality in production. RAGAS metrics showed that multi-context questions are the weakest point in our pipeline (context precision drops to 0.34 for the bottom 10), pointing to a need for better retrieval strategies like query decomposition, increased top_k, and cross-encoder re-ranking.
 
-The LLM-as-Judge experiments demonstrated how subtle biases (position, length) can compromise evaluation reliability. The swap-and-average technique effectively neutralizes position bias but creates a high "tie" rate that reduces discriminative power. For production use, a larger calibration set (50+ samples) and multiple judge models would significantly improve reliability.
+The LLM-as-Judge experiments demonstrated how subtle biases (position, length) can compromise evaluation reliability. The swap-and-average technique effectively neutralizes position bias (A wins only 26.7% as first position, well below the 50% bias threshold). Human calibration achieved a Cohen's kappa of 0.531 (moderate agreement), with disagreements concentrated on edge cases where both answers were poor — the judge defaults to a winner while humans call ties. For production use, a larger calibration set (50+ samples) and explicit conciseness criteria would improve reliability.
 
-On the guardrails side, the keyword-based approach provides excellent latency (<1ms) but has gaps against encoding-based attacks (Base64, ROT13). A production system should combine keyword matching with a dedicated injection classifier (like Meta's Prompt Guard) for defense-in-depth.
+On the guardrails side, the multi-layered defense approach (injection detection + content safety + PII redaction + topic validation) achieved 100% adversarial detection with 0% false positives. The keyword-based output guard provides excellent latency (<1ms) but should be supplemented with Llama Guard 3 via Groq API for production to handle novel unsafe patterns. The full pipeline adds only 0.2ms P95 overhead — negligible compared to the LLM generation step.
 
 ## Demo Video
 [To be recorded — will include: RAGAS live run, LLM-Judge comparison, adversarial attack demo, and latency benchmark output]

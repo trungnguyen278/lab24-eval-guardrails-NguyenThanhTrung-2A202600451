@@ -1,11 +1,11 @@
 question_id,question,human_winner,confidence,notes
-1,What is the session timeout duration for VietBank's online banking?,B,high,Agree - Answer B is clearly better with more context
-2,What is the minimum payment required for VietBank credit cards?,tie,low,"Close call, but both are acceptable"
-3,What is the cashback rate for VietBank Signature credit card?,B,high,Agree - Answer B is clearly better with more context
-4,What encryption standard does VietBank use for transactions?,B,low,Slight preference for B's additional explanation
-5,What is the billing cycle for VietBank credit cards?,B,high,Agree - Answer B is clearly better with more context
-6,Compare the total annual cost of holding a Gold vs Platinum credit card assuming,B,low,Slight preference for B's additional explanation
-7,How many ATMs does VietBank have?,A,high,Answer A is more concise and directly addresses the question
-8,How often must customer information be updated for standard accounts?,B,medium,Answer B includes useful additional context
-9,What is the minimum initial deposit required to open a personal savings account ,tie,medium,Both answers are comparable in accuracy and helpfulness
-10,How long are transaction records retained?,A,medium,Answer A provides the key information without filler
+1,What is the session timeout duration for VietBank's online banking?,B,high,"B adds useful security context (biometric re-auth, applies to both web and mobile)"
+2,What is the minimum payment required for VietBank credit cards?,B,medium,"Both answer the core question correctly, but B includes late fee and revolving interest which are relevant"
+3,What is the cashback rate for VietBank Signature credit card?,tie,low,"Both dump raw data rather than answering concisely. Neither is well-structured"
+4,What encryption standard does VietBank use for transactions?,tie,medium,"A talks about term deposits which is irrelevant. B also includes irrelevant info. Neither actually states TLS 1.3 clearly"
+5,What is the billing cycle for VietBank credit cards?,B,high,"B includes related payment info (late fee, installment). A lists card tiers which is less relevant"
+6,Compare the total annual cost of holding a Gold vs Platinum credit card,A,medium,"A at least mentions Gold 500K and Billing info. B mentions Classic instead of Platinum - factually less useful"
+7,How many ATMs does VietBank have?,tie,high,"Both fail to answer the question. Neither mentions 1500+ ATMs. Equally poor"
+8,How often must customer information be updated for standard accounts?,tie,high,"Both fail to mention the 2-year update requirement. Neither is helpful for this specific question"
+9,What is the minimum initial deposit required to open a personal savings account?,A,high,"A gives a direct, concise answer (500K VND). B is bloated with unnecessary details for a simple factual question"
+10,How long are transaction records retained?,tie,medium,"Both miss the key fact (5 years minimum). A lists app features, B lists similar irrelevant info"

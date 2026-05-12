@@ -25,7 +25,8 @@ VN_PII = {
     "phone_intl": r"\+\d[\d\-]{7,15}\b",
     "tax_code": r"\b\d{10}(-\d{3})?\b",
     "email": r"\b[\w.-]+@[\w.-]+\.\w+\b",
-    "address": r"\b\d{1,5}\s+(Main|Elm|Oak|Maple|Le Loi|Nguyen Hue|Tran Hung Dao)\b",
+    "address": r"\b\d{1,5}\s+(Main|Elm|Oak|Maple|Le Loi|Lê Lợi|Nguyen Hue|Nguyễn Huệ|Tran Hung Dao|Trần Hưng Đạo)\b",
+    "vn_name": r"\b(Nguyễn|Trần|Lê|Phạm|Hoàng|Huỳnh|Phan|Vũ|Võ|Đặng|Bùi|Đỗ|Hồ|Ngô|Dương|Lý)\s+[A-ZÀ-Ỹ][a-zà-ỹ]+(?:\s+[A-ZÀ-Ỹ][a-zà-ỹ]+)*\b",
 }
 
 
@@ -87,6 +88,86 @@ class InputGuard:
             except Exception:
                 pass
         return found
+
+
+# ============================================================
+# Injection Detector
+# ============================================================
+
+INJECTION_PATTERNS = [
+    r"(?i)\bbase64\b",
+    r"(?i)\brot13\b",
+    r"(?i)\bhex\s*(encod|decod|string)",
+    r"(?i)(decode|encode)\s+this",
+    r"(?i)translate\s+from\s+(rot13|base64|hex|binary)",
+    r"[A-Za-z0-9+/]{20,}={0,2}",
+    r"(?i)\b[0-9a-f]{20,}\b",
+    r"(?i)(ignore|disregard|forget|override)\s+(all\s+)?(previous|prior|above|your|safety|system)\s*(instructions|rules|guidelines|checks|prompt|constraints)",
+    r"(?i)\bsystem\s*(override|prompt|instruction)",
+    r"(?i)(you\s+are\s+now|from\s+now\s+on\s+you\s+are|pretend\s+(you\s+are|you're|to\s+be))\s+",
+    r"(?i)\b(DAN|jailbreak|do\s+anything\s+now|freedom\s*gpt|no\s*rules)\b",
+    r"(?i)(act\s+as|behave\s+as|you\s+are)\s+(an?\s+)?(unrestricted|uncensored|unfiltered|evil|malicious)",
+    r"(?i)safety\s+(filters?|module|checks?)\s+(are\s+)?(disabled|off|removed)",
+    r"(?i)(developer|admin|debug|test)\s+mode",
+    r"(?i)\[\s*system\s*(override|prompt)\s*\]",
+    r"(?i)<!--.*?(admin|system|ignore|override).*?-->",
+    r"(?i)(latest|new|updated?)\s+(policy|guideline|instruction)\s+(update|document|file)",
+    r"(?i)fake_policy",
+    r"(?i)confirm\s+by\s+sharing",
+    r"(?i)reveal\s+(all|customer|internal|system)",
+]
+
+
+class InjectionDetector:
+    def __init__(self):
+        self._compiled = [re.compile(p) for p in INJECTION_PATTERNS]
+
+    def check(self, text: str) -> tuple[bool, str]:
+        if not text:
+            return True, "Empty input"
+        for i, pattern in enumerate(self._compiled):
+            match = pattern.search(text)
+            if match:
+                return False, f"Injection pattern detected: {match.group()[:40]}"
+        return True, "No injection detected"
+
+
+# ============================================================
+# Content Safety Detector (dangerous action keywords)
+# ============================================================
+
+DANGEROUS_ACTIONS = [
+    "hack", "steal", "exploit", "bypass security", "attack",
+    "phishing", "forge", "embezzle", "robbery", "rob a bank",
+    "malware", "ransomware", "keylogger",
+    "forge bank", "forge document", "fake identity",
+    "launder money", "money laundering",
+]
+
+DANGEROUS_CONTEXT = [
+    r"(?i)(how\s+to|explain|show\s+me|teach|help\s+me|tell\s+me\s+how)\s+.{0,30}(hack|steal|exploit|forge|phishing|embezzle|rob|bypass|attack|crack)",
+    r"(?i)(create|build|make|write)\s+.{0,20}(phishing|malware|exploit|fake)",
+    r"(?i)(plan|method|way|step).{0,30}(rob|theft|steal|hack|fraud|embezzle)",
+]
+
+
+class ContentSafetyDetector:
+    def __init__(self):
+        self._action_set = set(DANGEROUS_ACTIONS)
+        self._context_patterns = [re.compile(p) for p in DANGEROUS_CONTEXT]
+
+    def check(self, text: str) -> tuple[bool, str]:
+        if not text:
+            return True, "Empty input"
+        text_lower = text.lower()
+        for action in self._action_set:
+            if action in text_lower:
+                return False, f"Dangerous content detected: '{action}'"
+        for pattern in self._context_patterns:
+            match = pattern.search(text)
+            if match:
+                return False, f"Dangerous intent detected: {match.group()[:40]}"
+        return True, "Content safe"
 
 
 # ============================================================
