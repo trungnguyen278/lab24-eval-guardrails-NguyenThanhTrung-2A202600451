@@ -1,0 +1,30 @@
+{
+  "faithfulness": 0.7864,
+  "answer_relevancy": 0.7603,
+  "context_precision": 0.649,
+  "context_recall": 0.7123,
+  "total_questions": 50,
+  "by_type": {
+    "simple": {
+      "count": 25,
+      "faithfulness": 0.8685,
+      "answer_relevancy": 0.8307,
+      "context_precision": 0.7847,
+      "context_recall": 0.8245
+    },
+    "reasoning": {
+      "count": 12,
+      "faithfulness": 0.7053,
+      "answer_relevancy": 0.7272,
+      "context_precision": 0.5332,
+      "context_recall": 0.593
+    },
+    "multi_context": {
+      "count": 13,
+      "faithfulness": 0.7034,
+      "answer_relevancy": 0.6557,
+      "context_precision": 0.4951,
+      "context_recall": 0.6067
+    }
+  }
+}

@@ -1,0 +1,11 @@
+question_id,question,human_winner,confidence,notes
+1,What is the session timeout duration for VietBank's online banking?,B,high,Agree - Answer B is clearly better with more context
+2,What is the minimum payment required for VietBank credit cards?,tie,low,"Close call, but both are acceptable"
+3,What is the cashback rate for VietBank Signature credit card?,B,high,Agree - Answer B is clearly better with more context
+4,What encryption standard does VietBank use for transactions?,B,low,Slight preference for B's additional explanation
+5,What is the billing cycle for VietBank credit cards?,B,high,Agree - Answer B is clearly better with more context
+6,Compare the total annual cost of holding a Gold vs Platinum credit card assuming,B,low,Slight preference for B's additional explanation
+7,How many ATMs does VietBank have?,A,high,Answer A is more concise and directly addresses the question
+8,How often must customer information be updated for standard accounts?,B,medium,Answer B includes useful additional context
+9,What is the minimum initial deposit required to open a personal savings account ,tie,medium,Both answers are comparable in accuracy and helpfulness
+10,How long are transaction records retained?,A,medium,Answer A provides the key information without filler
